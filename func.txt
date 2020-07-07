@@ -1,0 +1,92 @@
+const moment = require('moment');
+const express = require('express');
+const B = require('os').EOL;
+
+function Func()
+{
+    const self = this;
+    this.client = null;
+}
+const app = express();
+app.locals.moment = require('moment');
+module.exports = Func;
+
+var prototype = Func.prototype;
+
+prototype.getKey = function(data)
+{
+    for (element in data)
+    return element;
+}
+
+prototype.val2key = function(val,array)
+{
+    for (var key in array) 
+    {
+        if(key == val)
+        {
+            return key;
+        }
+    }
+ return false;
+}
+
+prototype.chatMsg = function(source, message, botmsg, client)
+{
+    this.client = client
+    if(botmsg == null)
+    {
+        this.createlog(source,message);
+    }
+    else
+    {
+        this.createlog(source,message,botmsg);
+    }
+    this.client.chatMessage(source, botmsg);
+}
+
+prototype.groupMsg = function(client, allwiners)
+{
+    // client.getPersonas(allwiners, function(personas) {
+    //     var persona = personas[allwiners];
+    //     var name = persona ? persona.player_name : ("[" + allwiners + "]");
+    //     // the player's name is now available as name
+    //     client.chat.sendChatMessage('4675139', '14455965', name);
+    // });
+    client.getPersonas(allwiners, function(personas)
+    {
+        var persona = personas[76561198004770395];
+        client.chat.sendChatMessage('4675139', '14455965', persona);
+
+    });
+    //client.chat.sendChatMessage('4675139', '14455965', allwiners);
+}
+
+prototype.createlog = function(source, message, botmsg)
+{
+    var p = moment(Date.now()).format('DD.MM.YYYY');
+    var fs = require ('fs');
+    var time = moment(Date.now()).format('HH:mm:ss');
+    var dir = './' + p.toString();
+    if (!fs.existsSync(dir))
+        fs.mkdirSync(dir);
+
+    if(!fs.existsSync(p + '/' + source + '.txt'))
+    {
+        fs.writeFile(p + '/' + source + '.txt', 'log of ' + source + B + time + ' ' + message + B + time + ' bot: ' + botmsg, function(err)
+        { 
+            if(err)
+                return console.log(err); 
+
+            console.log("file saved");
+        });
+    }
+    else
+    {
+        fs.appendFile(p+'/'+source + '.txt', B + time + ' ' + message + B + time + ' bot: ' + botmsg, (err) => 
+        {
+            if (err) throw err;
+            console.log('updated');
+        });
+    }
+}

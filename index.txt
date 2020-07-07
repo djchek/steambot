@@ -1,0 +1,356 @@
+const SteamUser = require('steam-user');
+const SteamTotp = require('steam-totp');
+const SteamCommunity = require('steamcommunity');
+const B = require('os').EOL;
+const func = require('./func.js');
+const giveaway = require('./giveaway.js');
+const config = require('./config.js');
+const express = require('express');
+const moment = require('moment');
+
+
+let Give = new giveaway();
+let Func = new func();
+
+
+const app = express();
+app.locals.moment = require('moment');
+const client = new SteamUser();
+const community = new SteamCommunity();
+
+var shared_secret
+const LogOnOptions = 
+{
+  accountName: '',
+  password:  '',
+  twoFactorCode: SteamTotp.generateAuthCode('')
+
+};
+
+client.logOn(LogOnOptions);
+client.on('loggedOn', () => 
+{
+    console.log('Logged into Steam');
+    //client.addFriend('76561198004770395');
+    client.setPersona(SteamUser.EPersonaState.Online);
+    client.gamesPlayed('SteamLvLUp');
+});
+
+client.on('webSession', function(sessionID, newCookie) 
+{  
+    checkFriend(); 
+    client.chat.getGroups(function(err,response){
+        console.log(response);
+    });
+});
+
+function checkFriend()
+{
+    for(var user in client.myFriends)
+    { 
+        if(client.myFriends[user] === 2)
+        { 
+            client.addFriend(user); 
+            var sid64 = [];
+            sid64.push(user);
+            client.getSteamLevels(sid64, function(results) 
+            {
+                if (results[Func.getKey(results)] < 10) 
+                {
+                    client.chatMessage(user, 'Your level is lower than 10, boost your lvl on steamlvlup and come back :)');
+                    client.removeFriend(user);
+                }
+                else
+                {
+                    client.chatMessage(user, 'Thanks for adding me! Send !help to see commands.');
+                }
+            });
+            
+        }
+    }
+}
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
+client.on('friendRelationship', (steamid, relationship) => 
+{
+    if (relationship === 2) 
+    {
+        client.addFriend(steamid);
+        var accID = [];
+        accID.push(steamid.accountid.toString());
+        client.getSteamLevels(accID, function(results) 
+        {
+            if (results[Func.getKey(results)] < 10) 
+            {
+                client.chatMessage(steamid, 'Your level is lower than 10, boost your lvl on steamlvlup and come back :)');
+                client.removeFriend(steamid);
+            }
+            else
+            {
+                client.chatMessage(steamid, 'Thanks for adding me! Send !help to see commands.');
+            }
+        });
+    }
+});
+
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+var commandlist = 'Commands:';
+commandlist += B+'!mylevel - Show your current level';
+commandlist += B+'!site - Show link on steamlvlup site';
+commandlist += B+'!support -  Show link to steamlvlup support, if you have problems you can send a ticket';
+commandlist += B+'!join - Join your account to ivent';
+//commandlist += B+'!calc - show how much you need to get desired level'
+
+var adminlist = 'Admin commands;';
+adminlist += B+'!start_time - to start timed event';
+adminlist += B+'!start_maxmembers - to start event by members';
+adminlist += B+'!start_toend - how much members in event';
+adminlist += B+'!end_event - how much members in event';
+
+
+
+client.on('friendMessage', function(source, message) 
+{
+    var botmsg = 'Write !help to see commands';
+
+    message = message.toLowerCase();
+    if (message == '!admin')
+    {
+        if (config.admins.indexOf(source.accountid))
+        {
+            botmsg = adminlist;
+            Func.chatMsg(source, message, botmsg, client);
+        }
+        else
+        {
+            botmsg = 'You arent admin';
+            Func.chatMsg(source, message, botmsg, client);
+        }
+    }
+    
+    // if (message == '!eventmembers')
+    // {
+    //     if (config.admins.indexOf(source.accountid))
+    //     {
+    //         botmsg = Object.keys(Give.members).length + ' members';
+    //         Func.chatMsg(source, message, botmsg, client);
+    //     }
+    //     else
+    //     {
+    //         botmsg = 'You arent admin';
+    //         Func.chatMsg(source, message, botmsg, client);
+    //     }
+    // }
+
+    if (message == '!end_event')
+    {
+        if (config.admins.indexOf(source.accountid))
+        {
+            botmsg = 'Event ended!';
+            Func.chatMsg(source, message, botmsg, client);
+            this.started = false;
+            Give.Winner(client);
+        }
+        else
+        {
+            botmsg = 'You arent admin';
+            Func.chatMsg(source, message, botmsg, client);
+        }
+    }
+
+    // if (message == '!winner')
+    // {
+    //     if (config.admins.indexOf(source.accountid))
+    //     {
+    //         botmsg = 'get your gems, pidor ' + Give.winner;
+    //         Func.chatMsg(source, message, botmsg, client);
+    //     }
+    //     else
+    //     {
+    //         botmsg = 'You arent admin';
+    //         Func.chatMsg(source, message, botmsg, client);
+    //     }
+    // }
+    
+    if(message.indexOf('!start_toend') > -1)
+    {   
+        if(Give.started != true)
+        {
+            var req = message.split(" ");///!start_maxmembers, req[0]=amount of gems, req[1]=winner count
+            if(!isNaN(req[1]) && (!isNaN(req[2])))
+            {
+                gemAmount = req[1];
+                winnercount = req[2];
+                Give.getCodes(gemAmount,winnercount);
+                if (config.admins.indexOf(source.accountid))
+                {
+                    botmsg = 'Event has been start!'+ B + 'Ammount = ' + req[2] + B + 'Number of winners = ' + req[3];
+                    Func.chatMsg(source, message, botmsg, client);
+                    Give.Start_toend(client);
+                }
+                else
+                {
+                    botmsg = 'You arent admin';
+                    Func.chatMsg(source, message, botmsg, client);
+                }
+            }
+            else
+            {
+                botmsg = 'Write !start_toend (amount of gems, number of winners)';
+                Func.chatMsg(source, message, botmsg, client);
+            }
+        }
+        else
+        {
+            botmsg = 'Event already started';
+            Func.chatMsg(source, message, botmsg, client);
+        }
+    }
+
+    if(message.indexOf('!start_maxmembers') > -1)
+    {   
+        if(Give.started != true)
+        {
+            var maxmembers = message.split(" ");///!start_maxmembers, req[1]=number of members, req[2]=amount of gems
+            if(!isNaN(maxmembers[1]) && (!isNaN(maxmembers[2])) && (!isNaN(maxmembers[3])))
+            {
+                gemAmount = maxmembers[2];
+                winnercount = maxmembers[3];
+                Give.getCodes(gemAmount,winnercount);
+                if (config.admins.indexOf(source.accountid))
+                {
+                    botmsg = 'Event has been start! Waiting max members.'+ B + 'Number maxmembers = ' + maxmembers[1] + B + 'Ammount = ' + maxmembers[2] + B + 'Number of winners = ' + maxmembers[3];
+                    Func.chatMsg(source, message, botmsg, client);
+                    Give.Start_maxmembers(client,maxmembers);
+                    //client.chat.sendChatMessage('4675139', '14455965', 'ssss');
+                }
+                else
+                {
+                    botmsg = 'You arent admin';
+                    Func.chatMsg(source, message, botmsg, client);
+                }
+            }
+            else
+            {
+                botmsg = 'Write !start_maxmembers (count of members, amount of gems, number of winners)';
+                Func.chatMsg(source, message, botmsg, client);
+            }
+        }
+        else
+        {
+            botmsg = 'Event already started';
+            Func.chatMsg(source, message, botmsg, client);
+        }
+    }
+
+    if(message.indexOf('!start_time') > -1)
+    {
+        if(Give.started != true)
+        {
+            var time = message.split(" ");///req[0]=!start_time, req[1]=60
+            if(!isNaN(time[1]) && (!isNaN(time[2])) && (!isNaN(time[3])))
+            {
+                gemAmount = time[2];
+                winnercount = time[3];
+                Give.getCodes(gemAmount,winnercount);
+                if (config.admins.indexOf(source.accountid))
+                {
+                    botmsg = 'Event has been start!'+ B + 'Time = ' + time[1] + B + 'Ammount = ' + time[2] + B + 'Number of winners = ' + time[3];
+                    Func.chatMsg(source, message, botmsg, client);
+                    Give.Start_time(client,time);
+                }
+                else
+                {
+                    botmsg = 'You arent admin';
+                    Func.chatMsg(source, message, botmsg, client);
+                }
+            }
+            else
+            {
+                botmsg = 'Write !start_time (minutes, amount of gems, number of winners)';
+                Func.chatMsg(source, message, botmsg, client);
+            }
+        }
+        else
+        {
+            botmsg = 'Event already started';
+            Func.chatMsg(source, message, botmsg, client);
+        }
+    }
+
+    if (message == '!help')
+    {
+        botmsg = commandlist;
+        Func.chatMsg(source, message, botmsg, client);
+    }
+    
+    if (message == '!site')
+    {
+        botmsg = 'Our site - steamlvlup .com';
+        Func.chatMsg(source, message, botmsg, client);
+    }
+
+    if (message == '!mylevel')
+    {
+        var accID = [];
+        var lvl = '';
+        accID.push(source.accountid.toString());
+        client.getSteamLevels(accID, function(err, users) 
+        {
+            lvl = 'Your level is '+ users[Func.getKey(users)];
+            botmsg = lvl;
+            Func.chatMsg(source, message, botmsg, client);
+        });
+    }
+
+    if (message == '!support')
+    {
+        botmsg = 'Ask question here - https://steamlvlup .com/support';
+        Func.chatMsg(source, message, botmsg, client);
+    }
+
+    if (message == '!join')
+    {
+        var user = {};
+        user.steamid = source.getSteamID64();
+        user.source = source;
+        var joiners = Give.Join(user);
+        if (joiners == 1)
+        {
+            botmsg = 'You are joined to late, max count of members';
+            Func.chatMsg(source, message, botmsg, client);
+        }
+        if (joiners == 2)
+        {
+            botmsg = 'You are already joined to ivent';
+            Func.chatMsg(source, message, botmsg, client);        }
+        if (joiners == 3)
+        {
+            botmsg = 'You are joined to ivent, join to our chat!';
+            Func.chatMsg(source, message, botmsg, client);
+            //client.chat.inviteUserToGroup('4675139', source);
+        }
+        if (joiners == 4)
+        {
+            botmsg = 'Event isnt started';
+            Func.chatMsg(source, message, botmsg, client);
+        }
+    }
+    if (botmsg == 'Write !help to see commands')
+        Func.chatMsg(source, message, botmsg, client);
+});

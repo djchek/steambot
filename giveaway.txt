@@ -1,0 +1,141 @@
+const func = require('./func.js');
+const config = require('./config.js')
+const request = require('request');
+
+let Func = new func();
+
+function Give()
+{
+    const self = this;
+    this.members = {};
+    this.maxmembers = 2;
+    this.winnercount = 1;
+    this.winner = null;
+    this.allwiners = [];
+    this.started = false;
+    this.time = 0;
+    this.client = null;
+    this.codes = {};
+}
+
+module.exports = Give;
+
+var prototype = Give.prototype;
+
+prototype.Join = function(user)
+{
+    if(this.started)
+    {
+        if (Object.keys(this.members).length >= this.maxmembers)
+            return 1;// return when max count of members
+        var key = Func.val2key(user.steamid, this.members);
+        if (key)
+        {
+            return 2;// return when user already in giveaway
+        }
+        else
+        {
+            this.members[user.steamid] = user;
+            return 3;// return when user join to giveaway
+        }
+    }
+    else
+    {
+        return 4;// event isn't started
+    }
+}
+
+prototype.timer = function(self)
+{
+    self.time--;
+    if(self.time < 0)
+    {
+        clearInterval(self.inter);
+        self.Winner(self.client);
+    }
+}
+
+prototype.timemembers = function(self)
+{
+    if (Object.keys(self.members).length == self.maxmembers)
+    {
+        clearInterval(self.inter);
+        self.Winner(self.client);
+    }
+}
+
+prototype.Start_time = function(client,time)
+{
+    var self = this;
+    this.started = true;
+    this.time = parseInt(time)*60;
+    this.inter = setInterval(function(){
+        self.timer(self)
+    },1000);
+    this.client = client;
+}
+
+prototype.Start_toend = function(client)
+{
+    this.started = true;
+    this.client = client;
+}
+
+prototype.Winner = function(client)
+{  
+    this.client = client;
+    var keys = Object.keys(this.members);
+    for (var i = 0; i < this.winnercount; i++)
+    {
+        this.winner = this.members[keys[Math.floor(keys.length * Math.random())]].steamid;
+        this.allwiners.push(this.winner);
+        delete this.members[this.winner];
+    }
+    this.members = {};
+    this.winner = null;
+    this.started = false;
+    this.MessageWinner(client);
+}
+
+
+prototype.MessageWinner = function(client)
+{
+    this.client = client;
+    for(var i = 0; i < (this.allwiners.length); i++)
+    {
+        botmsg = 'You are a winner, thank you for using our service. Get you code and activate it on our site ' + this.codes[i];
+        source = this.allwiners[i];
+        message = 'bot: This is a message to winner';
+        Func.chatMsg(source, message, botmsg, client);
+    }
+    Func.groupMsg(client, this.allwiners);
+    this.allwiners = [];
+    this.codes = {};
+}
+
+
+prototype.Start_maxmembers = function(client, maxmembers)
+{
+    var self = this;
+    this.started = true;
+    this.inter = setInterval(function(){
+        self.timemembers(self)
+    },1000);
+    this.maxmembers = parseInt(maxmembers[1]);
+    this.client = client;
+}
+
+
+prototype.getCodes = function(gemAmount, winnercount, self)
+{
+    var self = this;
+    request({
+        url: 'secret'+ winnercount + '&amount=' + gemAmount,
+    }, function(error, response, body) {
+        if(error)console.log(error);
+        self.codes = JSON.parse(body).codes;
+    });
+    this.winnercount = winnercount;
+    this.gemAmount = gemAmount;
+    this.codes = self.codes;
+}
